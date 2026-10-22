@@ -1,4 +1,4 @@
-// Claude Profile Switcher
+// DandyPicker
 // Runs several Claude Desktop instances side by side, each with its own data
 // folder (and therefore its own signed-in account), via Electron's
 // --user-data-dir switch. Profiles live in profiles.json next to the .exe.
@@ -21,13 +21,13 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.VisualBasic;
 
-[assembly: System.Reflection.AssemblyTitle("Claude Profile Switcher")]
-[assembly: System.Reflection.AssemblyProduct("Claude Profile Switcher")]
-[assembly: System.Reflection.AssemblyDescription("Run Claude Desktop with several accounts side by side")]
+[assembly: System.Reflection.AssemblyTitle("DandyPicker")]
+[assembly: System.Reflection.AssemblyProduct("DandyPicker")]
+[assembly: System.Reflection.AssemblyDescription("Pick which Claude account to open - run several side by side")]
 [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
 [assembly: System.Reflection.AssemblyFileVersion("1.0.0.0")]
 
-namespace ClaudeProfileSwitcher
+namespace DandyPicker
 {
     public class Profile
     {
@@ -37,7 +37,7 @@ namespace ClaudeProfileSwitcher
 
     static class Program
     {
-        public const string Title = "Claude Profile Switcher";
+        public const string Title = "DandyPicker";
 
         [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] static extern IntPtr FindWindow(string cls, string title);
@@ -49,7 +49,7 @@ namespace ClaudeProfileSwitcher
         {
             SetProcessDPIAware();
             bool first;
-            using (var mutex = new Mutex(true, "ClaudeProfileSwitcher.SingleInstance", out first))
+            using (var mutex = new Mutex(true, "DandyPicker.SingleInstance", out first))
             {
                 if (!first)
                 {
