@@ -69,6 +69,29 @@ function Start-ClaudeProfile($p) {
     }
 }
 
+# Windows always routes claude:// links (e.g. the browser's sign-in hand-off) to
+# the default instance. Re-launching with the profile's --user-data-dir plus the
+# link forwards it to that profile's running instance instead.
+function Send-LinkToProfile($p) {
+    $url = ''
+    try { $url = [System.Windows.Forms.Clipboard]::GetText().Trim() } catch {}
+    if ($url -notmatch '^claude://') {
+        $url = [Microsoft.VisualBasic.Interaction]::InputBox(
+            "Paste the claude:// sign-in link for '$($p.name)'.`n`nIn the browser, cancel the 'Open Claude?' prompt, then right-click the page's Open Claude button and choose Copy link.",
+            'Send sign-in link', '').Trim()
+    }
+    if (-not $url) { return }
+    if ($url -notmatch '^claude://') {
+        [System.Windows.Forms.MessageBox]::Show('That isn''t a claude:// link.', 'Claude Profile Switcher', 'OK', 'Warning') | Out-Null
+        return
+    }
+    $launchArgs = @()
+    if ($p.dataDir) { $launchArgs += "--user-data-dir=`"$($p.dataDir)`"" }
+    $launchArgs += "`"$url`""
+    Start-Process $ClaudeAlias -ArgumentList $launchArgs
+    try { [System.Windows.Forms.Clipboard]::Clear() } catch {}
+}
+
 function New-ProfileShortcut($p) {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $safe = ($p.name -replace '[\\/:*?"<>|]', '').Trim()
@@ -87,8 +110,8 @@ $script:Profiles = @(Load-Profiles)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Claude Profile Switcher'
-$form.Size = New-Object System.Drawing.Size(620, 360)
-$form.MinimumSize = New-Object System.Drawing.Size(520, 300)
+$form.Size = New-Object System.Drawing.Size(620, 390)
+$form.MinimumSize = New-Object System.Drawing.Size(520, 390)
 $form.StartPosition = 'CenterScreen'
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 9.5)
 if (Test-Path $IconFile) { $form.Icon = New-Object System.Drawing.Icon($IconFile) }
@@ -99,7 +122,7 @@ $list.FullRowSelect = $true
 $list.MultiSelect = $false
 $list.HideSelection = $false
 $list.Location = New-Object System.Drawing.Point(12, 12)
-$list.Size = New-Object System.Drawing.Size(450, 296)
+$list.Size = New-Object System.Drawing.Size(450, 326)
 $list.Anchor = 'Top, Bottom, Left, Right'
 [void]$list.Columns.Add('Profile', 140)
 [void]$list.Columns.Add('Status', 90)
@@ -147,6 +170,15 @@ function Add-Button($text, $onClick, [switch]$Primary) {
 
 $btnOpen = Add-Button 'Open' { $p = Get-Selected; if ($p) { Start-ClaudeProfile $p; Start-Sleep -Milliseconds 800; Refresh-List } } -Primary
 $form.AcceptButton = $btnOpen
+[void](Add-Button 'Send sign-in link' {
+    $p = Get-Selected; if (-not $p) { return }
+    $running = Get-RunningDirs
+    if (-not $running.Contains((Resolve-DataDir $p).TrimEnd('\').ToLowerInvariant())) {
+        [System.Windows.Forms.MessageBox]::Show("Open '$($p.name)' and start signing in from its window first - the link only works in the window that asked for it.", 'Claude Profile Switcher') | Out-Null
+        return
+    }
+    Send-LinkToProfile $p
+})
 $script:y += 8
 
 [void](Add-Button 'Add profile...' {
