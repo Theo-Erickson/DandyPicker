@@ -9,7 +9,8 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing, Microsoft.VisualBas
 
 $Here         = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesFile = Join-Path $Here 'profiles.json'
-$IconFile     = Join-Path $Here 'claude.ico'
+$IconFile     = Join-Path $Here 'claude.ico'      # per-profile Claude shortcuts
+$AppIconFile  = Join-Path $Here 'dandelion.ico'   # the switcher itself
 $ClaudeAlias  = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\claude-desktop.exe'
 $DefaultDir   = Join-Path $env:APPDATA 'Claude'
 
@@ -114,7 +115,7 @@ $form.Size = New-Object System.Drawing.Size(620, 390)
 $form.MinimumSize = New-Object System.Drawing.Size(520, 390)
 $form.StartPosition = 'CenterScreen'
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 9.5)
-if (Test-Path $IconFile) { $form.Icon = New-Object System.Drawing.Icon($IconFile) }
+if (Test-Path $AppIconFile) { $form.Icon = New-Object System.Drawing.Icon($AppIconFile) }
 
 $list = New-Object System.Windows.Forms.ListView
 $list.View = 'Details'
