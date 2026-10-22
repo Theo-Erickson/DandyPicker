@@ -1,0 +1,8 @@
+# Build output
+*.exe
+
+# Per-machine state
+profiles.json
+
+# Extracted from the installed Claude app; see README
+claude.ico
