@@ -6,3 +6,11 @@ profiles.json
 
 # Extracted from the installed Claude app; see README
 claude.ico
+
+# .NET build output
+bin/
+obj/
+dist/
+
+# Crash log (has local paths in it)
+dandypicker-error.log

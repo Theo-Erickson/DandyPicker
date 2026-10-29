@@ -11,17 +11,29 @@ means its own sign-in, chats and settings, and its own single-instance lock, so
 it runs alongside the normal one. DandyPicker keeps a list of these profiles
 and launches each with the right folder.
 
-- **Open** — start a profile, or bring it to the front if it's already running.
-- **Send sign-in link** — see below.
-- **Add profile / Rename / Remove** — edit the list. Removing never deletes the
-  profile's data folder.
-- **Open folder** — the folder Claude really uses for that profile. Claude is a
+Each profile is a dandelion. A running one glows green ("in bloom"):
+
+- **Open** — start a profile. A running one shows **Show window** instead,
+  which brings it to the front.
+- **Click the flower** to customize it: name, color, waviness, stem bend and
+  seed tips.
+- **⋯ menu** — **Customize**, **Send sign-in link** (see below), **Open data
+  folder**, **Desktop shortcut** and **Remove from list**. Removing never
+  deletes the profile's data folder.
+
+The flower is grown from the profile's name and folder. Going clockwise from
+the gold key seed, each seed is one of four lengths (2 bits), so four seeds
+spell one byte of `name/folder`: the picture can be read back like a QR code
+(**Show the code** in the Customize window). The same text also hashes to three
+seed words, like `mallow · hazel · marrow`, which name the flower and pick its
+default color. The look you choose never changes what the seeds say.
+- **Open data folder** goes to the folder Claude really uses. Claude is a
   packaged (MSIX) app, so Windows may keep the files in the package's private
   copy of AppData rather than the path shown.
-- **Desktop shortcut** — a one-click Claude shortcut for that profile.
 
 Profiles are stored in `profiles.json` next to the .exe. An empty `dataDir`
-means Claude's default folder.
+means Claude's default folder; `color`, `wave`, `bend` and `tips` (the
+flower's look) are optional.
 
 ## Signing a new profile in
 
@@ -32,12 +44,15 @@ window, never to the profile that asked. So:
 1. Open the new profile and start signing in from its window.
 2. When the browser asks "Open Claude?", cancel.
 3. Right-click the page's Open Claude button and copy the link.
-4. In DandyPicker, select the profile and click **Send sign-in link**.
+4. Switch back to DandyPicker. It sees the `claude://` link on the clipboard
+   and shows a **Send to <profile>** button for each running profile. You can
+   also paste the link yourself from the profile's ⋯ menu.
 
 ## Building
 
-`src\build.cmd` compiles `DandyPicker.exe` with the C# compiler that ships with
-Windows (.NET Framework 4.x) — nothing to install. Close DandyPicker first.
+DandyPicker is C# with [Avalonia](https://avaloniaui.net/), styled to match
+Hatpick. `build.cmd` publishes a single self-contained `DandyPicker.exe` into
+the repo folder. It needs the .NET 10 SDK. Close DandyPicker first.
 
 `dandelion.ico` is drawn by `tools\make-dandelion-icon.ps1`:
 
