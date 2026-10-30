@@ -101,7 +101,7 @@ namespace DandyPicker
 
         // Add a profile, or customize one: its name and its dandelion (color, waviness,
         // stem and seed tips), with a live preview. Returns false if cancelled.
-        public static bool Customize(Window owner, Profile p, bool adding, int count)
+        public static bool Customize(Window owner, Profile p, bool adding, int index)
         {
             var w = new ThemedWindow(owner, adding ? "Plant a profile" : "Customize " + p.name, 720);
             bool saved = false;
@@ -111,12 +111,10 @@ namespace DandyPicker
             bool code = false;
 
             var name = new TextBox { Text = adding ? "" : p.name, PlaceholderText = "e.g. Work or Personal" };
-            Func<string> dir = delegate { return adding ? Profiles.NewDataDir((name.Text ?? "").Trim(), count) : Profiles.DataDirOf(p); };
+            Func<string> dir = delegate { return adding ? Profiles.NewDataDir((name.Text ?? "").Trim(), index) : Profiles.DataDirOf(p); };
             Func<string> payload = delegate { return Dandelion.Payload(name.Text, dir()); };
 
-            var preview = new Border { Width = 240, Height = 240, CornerRadius = new CornerRadius(120), ClipToBounds = true, BorderThickness = new Thickness(1) };
-            preview.SetResourceReference(Border.BackgroundProperty, "Panel");
-            preview.SetResourceReference(Border.BorderBrushProperty, "Border");
+            var preview = new Border { Width = 200, Height = 368, HorizontalAlignment = HorizontalAlignment.Center };
             var words = Ui.Text("", 15, "Text");
             words.HorizontalAlignment = HorizontalAlignment.Center;
             var reads = Ui.Text("", 11.5, "Faint");
@@ -145,9 +143,10 @@ namespace DandyPicker
             {
                 string pl = payload();
                 string shown = string.IsNullOrEmpty(color) ? Dandelion.DefaultColor(pl) : color;
-                preview.Child = Dandelion.Flower(pl, shown, wave, bend, tips, 240, false, code);
+                // a grown, running plant, so the preview shows the whole look (hover it to see it sway)
+                preview.Child = new PlantView(new Plant(pl, shown, wave, bend, tips, index), index, true, PlantView.Now - 100000) { Width = 200, Height = 368, Code = code };
                 words.Text = Dandelion.SeedWords(pl);
-                reads.Text = code ? "Reads: " + Dandelion.Decode(Dandelion.Levels(pl)) : "Gold key seed, then clockwise: each seed's length is 2 bits.";
+                reads.Text = code ? "Reads: " + Dandelion.Decode(Dandelion.Levels(pl)) : "From the stem, clockwise: each seed's length is 2 bits.";
                 legend.IsVisible = code;
                 codeBtn.Content = code ? "Hide the code" : "Show the code";
                 where.Text = dir();

@@ -8,8 +8,9 @@ namespace DandyPicker
     // theme keys (see Theme.cs), attached as dynamic references.
     static class Ui
     {
-        public static readonly FontFamily UiFont = new FontFamily("Segoe UI Variable Text, Segoe UI");
-        public static readonly FontFamily Mono = new FontFamily("Cascadia Mono, Consolas");
+        // Atkinson Hyperlegible (SIL Open Font License), bundled from assets/fonts.
+        public static readonly FontFamily UiFont = new FontFamily("avares://DandyPicker/Assets/Fonts#Atkinson Hyperlegible Next");
+        public static readonly FontFamily Mono = new FontFamily("avares://DandyPicker/Assets/Fonts#Atkinson Hyperlegible Mono");
 
         // A property that follows a theme brush (like WPF's SetResourceReference).
         public static void SetResourceReference(this Control el, AvaloniaProperty p, string key)
@@ -75,6 +76,26 @@ namespace DandyPicker
             var b = new Button { Content = sp, Theme = Theme(style) };
             if (onClick != null) b.Click += delegate { onClick(); };
             return b;
+        }
+
+        // Fades a control in while it rises into place, after 'delayMs' (negative: show it as is).
+        public static T Rise<T>(T c, double delayMs) where T : Control
+        {
+            if (delayMs < 0) return c;
+            var ease = new Avalonia.Animation.Easings.CubicEaseOut();
+            c.Opacity = 0;
+            c.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("translateY(14px)");
+            c.Transitions = new Avalonia.Animation.Transitions
+            {
+                new Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(600), Easing = ease },
+                new Avalonia.Animation.TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(600), Easing = ease },
+            };
+            DispatcherTimer.RunOnce(delegate
+            {
+                c.Opacity = 1;
+                c.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("none");
+            }, TimeSpan.FromMilliseconds(Math.Max(1, delayMs)));
+            return c;
         }
 
         public static Border Panel(Control child, double padding = 16, string bg = "Panel", string border = "Border", double radius = 12)
@@ -152,6 +173,7 @@ namespace DandyPicker
             { "alert", "M12 4 2.8 20h18.4z M12 10v4 M12 17v.01" },
             { "open", "M5 12h12 M13 7l5 5-5 5" },
             { "front", "M4 7h11v11H4z M9 7V4h11v11h-5" },
+            { "gauge", "M4 16a8 8 0 1 1 16 0 M12 16l4.5-5" },
             { "seed", "M12 22V9 M12 9l-4.5-6 M12 9V2 M12 9l4.5-6 M12 9L6 6 M12 9l6-3" },
         };
 

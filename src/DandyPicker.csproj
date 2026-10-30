@@ -25,10 +25,15 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- Windows' own SQLite (winsqlite3.dll, kept patched by Windows Update) rather than a bundled copy -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.11" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="..\dandelion.ico" Link="dandelion.ico" />
+    <AvaloniaResource Include="..\assets\fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

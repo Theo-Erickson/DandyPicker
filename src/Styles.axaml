@@ -81,6 +81,18 @@
       <Setter Property="BorderBrush" Value="Transparent"/>
     </ControlTheme>
 
+    <!-- No look of its own: a clickable, focusable wrapper (the plants) -->
+    <ControlTheme x:Key="Bare" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Background="{TemplateBinding Background}"/>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
     <!-- A profile's dandelion in its round frame; clicking it customizes the flower -->
     <ControlTheme x:Key="Puff" TargetType="Button">
       <Setter Property="Width" Value="196"/>

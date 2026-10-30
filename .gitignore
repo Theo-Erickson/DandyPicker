@@ -3,6 +3,7 @@
 
 # Per-machine state
 profiles.json
+settings.json
 
 # Extracted from the installed Claude app; see README
 claude.ico

@@ -8,19 +8,27 @@ using Avalonia.Input.Platform;
 
 namespace DandyPicker
 {
-    // "Seed Field": a headline, a dandelion per profile (glowing while it runs), and a
-    // strip at the bottom when a sign-in link drifts onto the clipboard.
+    // "Seed Field": a headline, a plant per profile (soil, circuit-trace roots, a stem with a
+    // leaf per place in the list, and the dandelion), and a strip at the bottom when a
+    // sign-in link drifts onto the clipboard. Everything grows in when the window opens.
     class MainWindow : Window
     {
-        static readonly FontFamily Display = new FontFamily("Segoe UI Variable Display, Segoe UI");
-
         List<Profile> profiles;
+        readonly Settings settings = Settings.Load();
         HashSet<string> running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        bool refreshing;
+        bool refreshing, statusKnown;
         string clipLink;          // a claude:// link on the clipboard, if any
         string dismissedLink;     // ...that the user said to ignore
 
+        // The plants live as long as their profile, so a refresh doesn't make them grow again.
+        readonly Dictionary<Profile, Button> plants = new Dictionary<Profile, Button>();
+        readonly Dictionary<Profile, UsageInfo> usage = new Dictionary<Profile, UsageInfo>();
+        DateTime usageAt = DateTime.MinValue;
+        bool fetchingUsage;
+        double shownAt = double.NaN;     // when the window first showed (PlantView.Clock)
+
         readonly TextBlock caption;
+        readonly Button usageBtn;
         readonly WrapPanel field;
         readonly StackPanel bottom;
         readonly DispatcherTimer timer;
@@ -28,7 +36,7 @@ namespace DandyPicker
         public MainWindow()
         {
             Title = Program.Title;
-            Width = 960; Height = 680; MinWidth = 620; MinHeight = 520;
+            Width = 980; Height = 880; MinWidth = 640; MinHeight = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             FontFamily = Ui.UiFont;
             FontSize = 14;
@@ -39,17 +47,19 @@ namespace DandyPicker
 
             profiles = Profiles.Load();
 
-            var root = new DockPanel { Margin = new Thickness(56, 36, 56, 28) };
+            var root = new DockPanel { Margin = new Thickness(56, 32, 56, 24) };
 
             // headline
-            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+            usageBtn = Ui.IconBtn("gauge", "", ToggleUsage, "BtnPillOutline", "Text");
             var plant = Ui.IconBtn("plus", "Plant a profile", AddProfile, "BtnPillOutline", "Text");
-            plant.VerticalAlignment = VerticalAlignment.Bottom;
-            DockPanel.SetDock(plant, Dock.Right);
-            head.Children.Add(plant);
+            var buttons = Ui.Row(8, usageBtn, plant);
+            buttons.VerticalAlignment = VerticalAlignment.Bottom;
+            DockPanel.SetDock(buttons, Dock.Right);
+            head.Children.Add(buttons);
             caption = Ui.Text("", 12.5, "Muted");
             caption.LetterSpacing = 2;
-            var title = new TextBlock { FontFamily = Display, FontSize = 44, FontWeight = FontWeights.Light, LetterSpacing = -0.8 };
+            var title = new TextBlock { FontSize = 42, FontWeight = FontWeights.Light, LetterSpacing = -0.6 };
             title.Inlines.Add(new Avalonia.Controls.Documents.Run("Which Claude "));
             var today = new Avalonia.Controls.Documents.Run("today?") { FontWeight = FontWeights.SemiBold };
             today.Bind(Avalonia.Controls.Documents.TextElement.ForegroundProperty, this.GetResourceObservable("Accent"));
@@ -66,13 +76,29 @@ namespace DandyPicker
             root.Children.Add(new ScrollViewer { Content = field, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalContentAlignment = VerticalAlignment.Center });
             Content = root;
 
+            // The header rises in first; the plants grow once we know which are running.
+            Opened += delegate
+            {
+                shownAt = PlantView.Now;
+                Ui.Rise(caption, 0); Ui.Rise(title, 120); Ui.Rise(buttons, 220);
+                RefreshStatus(); CheckClipboard(); RefreshUsage(true);
+                timer.Start();
+            };
+            ShowUsageButton();
             Render();
 
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-            timer.Tick += delegate { RefreshStatus(); CheckClipboard(); };
-            Opened += delegate { RefreshStatus(); CheckClipboard(); timer.Start(); };
-            Activated += delegate { CheckClipboard(); };
+            timer.Tick += delegate { RefreshStatus(); CheckClipboard(); RefreshUsage(false); };
+            Activated += delegate { CheckClipboard(); RefreshUsage(false); };
             Closed += delegate { timer.Stop(); };
+        }
+
+        // Milliseconds left until 'ms' after the window opened; -1 once that's past (no animation).
+        double Later(double ms)
+        {
+            if (double.IsNaN(shownAt)) return ms;
+            double d = shownAt + ms - PlantView.Now;
+            return d > 0 ? d : -1;
         }
 
         // ---------- page ----------
@@ -82,9 +108,13 @@ namespace DandyPicker
             int on = profiles.Count(p => Profiles.IsRunning(running, p));
             caption.Text = (CultureInfo.CurrentCulture.DateTimeFormat.GetDayName(DateTime.Now.DayOfWeek) + " · " + on + " of " + profiles.Count + " open").ToUpperInvariant();
 
+            foreach (var gone in plants.Keys.Where(k => !profiles.Contains(k)).ToList()) plants.Remove(gone);
             field.Children.Clear();
-            foreach (var p in profiles) field.Children.Add(PuffItem(p));
-            field.Children.Add(NewItem());
+            if (statusKnown)
+            {
+                for (int i = 0; i < profiles.Count; i++) field.Children.Add(PlantItem(profiles[i], i));
+                field.Children.Add(NewItem(profiles.Count));
+            }
 
             bottom.Children.Clear();
             if (!Profiles.ClaudeFound)
@@ -103,30 +133,40 @@ namespace DandyPicker
             }
         }
 
-        Control PuffItem(Profile p)
+        Control PlantItem(Profile p, int index)
         {
             bool on = Profiles.IsRunning(running, p);
+            double t0 = index * 260;
 
-            var puff = new Button { Theme = Ui.Theme("Puff"), Content = Dandelion.Flower(p, 196, !on) };
-            if (on)
+            Button holder;
+            PlantView view;
+            if (plants.TryGetValue(p, out holder) && (int)holder.Tag == index)
             {
-                puff.SetResourceReference(Button.BackgroundProperty, "RunBg");
-                puff.SetResourceReference(Button.BorderBrushProperty, "OkBorder");
+                view = (PlantView)holder.Content;
+                (holder.Parent as Panel)?.Children.Remove(holder);
+                view.Running = on;
             }
-            puff.Tip("Customize " + p.name + "'s dandelion");
-            Avalonia.Automation.AutomationProperties.SetName(puff, "Customize " + p.name);
-            puff.Click += delegate { CustomizeProfile(p); };
-            puff.DoubleTapped += delegate { Open(p); };
-            // A soft green glow while the profile is running.
-            var frame = new Border { CornerRadius = new CornerRadius(98), Child = puff, HorizontalAlignment = HorizontalAlignment.Center };
-            if (on)
-                frame.BoxShadow = new BoxShadows(
-                    new BoxShadow { Spread = 10, Color = Color.FromArgb(20, 76, 195, 138) },
-                    new[] { new BoxShadow { Blur = 60, Color = Color.FromArgb(64, 76, 195, 138) } });
+            else
+            {
+                // Plants that appear after the window opened (a new profile) grow on their own.
+                double appear = double.IsNaN(shownAt) || Later(t0) < 0 ? PlantView.Now - t0 : shownAt;
+                if (holder != null) appear = PlantView.Now - 100000;   // its place changed: show it grown
+                view = new PlantView(p, index, on, appear) { Width = 228, Height = 420 };
+                holder = new Button { Theme = Ui.Theme("Bare"), Content = view, Tag = index, HorizontalAlignment = HorizontalAlignment.Center };
+                holder.Tip("Customize " + p.name + "'s dandelion");
+                Avalonia.Automation.AutomationProperties.SetName(holder, "Customize " + p.name);
+                holder.Click += delegate { CustomizeProfile(p); };
+                holder.DoubleTapped += delegate { Open(p); };
+                plants[p] = holder;
+            }
+            UsageInfo info = null;
+            bool showUsage = settings.usage || Program.DemoUsage;
+            if (showUsage) usage.TryGetValue(p, out info);
+            view.Usage = showUsage ? info : null;
 
             var name = Ui.Line(p.name, 22, "Text", FontWeights.Medium);
             name.HorizontalAlignment = HorizontalAlignment.Center;
-            name.MaxWidth = 220;
+            name.MaxWidth = 230;
 
             Control status;
             if (on)
@@ -139,9 +179,12 @@ namespace DandyPicker
             status.HorizontalAlignment = HorizontalAlignment.Center;
             status.Tip(Profiles.DataDirOf(p));
 
-            var words = Ui.Text(Dandelion.SeedWords(Dandelion.PayloadOf(p)), 11.5, "Faint");
+            var words = Ui.Text(Dandelion.SeedWords(Dandelion.PayloadOf(p)), 12, "Faint");
             words.FontFamily = Ui.Mono;
             words.HorizontalAlignment = HorizontalAlignment.Center;
+
+            var labels = Ui.Stack(3, name, status, words);
+            if (showUsage) labels.Children.Add(UsageLines(info));
 
             var open = Ui.Btn(on ? "Show window" : "Open", delegate { Open(p); }, on ? "BtnPillOutline" : "BtnPill");
             var more = Ui.IconBtn("more", null, null, "BtnRound");
@@ -150,19 +193,63 @@ namespace DandyPicker
             more.Click += delegate { ShowMenu(more, p); };
             var actions = Ui.Row(4, open, more);
             actions.HorizontalAlignment = HorizontalAlignment.Center;
-            actions.Margin = new Thickness(48, 4, 0, 0);   // centers the main button; ⋯ hangs off to its right
+            actions.Margin = new Thickness(48, 2, 0, 0);   // centers the main button; ⋯ hangs off to its right
 
-            var labels = Ui.Stack(4, name, status, words);
-            return new StackPanel { Width = 250, Spacing = 14, Margin = new Thickness(6, 12, 6, 12), Children = { frame, labels, actions } };
+            Ui.Rise(labels, Later(t0 + 1500));
+            Ui.Rise(actions, Later(t0 + 1680));
+            return new StackPanel { Width = 250, Spacing = 10, Margin = new Thickness(6, 18, 6, 12), Children = { holder, labels, actions } };   // room above for the usage rings
         }
 
-        Control NewItem()
+        Control UsageLines(UsageInfo info)
+        {
+            var sp = new StackPanel { Spacing = 3, Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+            if (info == null) { sp.Children.Add(Ui.Text("Checking usage...", 12.5, "Faint")); return sp; }
+            if (info.Error != null)
+            {
+                var t = Ui.Text("Usage unavailable", 12.5, "Faint");
+                t.HorizontalAlignment = HorizontalAlignment.Center;
+                t.Tip(info.Error);
+                sp.Children.Add(t);
+                return sp;
+            }
+            sp.Children.Add(UsageLine("Session", "resets in " + Until(info.SessionReset), info.Session, "#f2c14e"));
+            sp.Children.Add(UsageLine("This week", "resets " + When(info.WeekReset), info.Week, "#8fb4ff"));
+            return sp;
+        }
+
+        static Control UsageLine(string what, string reset, double percent, string color)
+        {
+            bool hot = percent >= 90;
+            var dot = new Ellipse { Width = 8, Height = 8, Fill = Ui.B(hot ? "#e8825f" : color), VerticalAlignment = VerticalAlignment.Center };
+            string text = hot ? what + " almost out · " + reset : what + " " + Math.Round(percent) + "% · " + reset;
+            var t = Ui.Text(text, 12.5, "Sub");
+            if (hot) t.Foreground = Ui.B("#f0a37a");
+            var row = Ui.Row(7, dot, t);
+            row.HorizontalAlignment = HorizontalAlignment.Center;
+            return row;
+        }
+
+        static string Until(DateTime? at)
+        {
+            if (at == null) return "soon";
+            var d = at.Value - DateTime.Now;
+            if (d.TotalMinutes < 1) return "a moment";
+            return d.TotalHours >= 1 ? (int)d.TotalHours + "h " + d.Minutes.ToString("00") + "m" : d.Minutes + "m";
+        }
+
+        static string When(DateTime? at)
+        {
+            if (at == null) return "soon";
+            return at.Value.ToString("ddd h:mm tt", CultureInfo.CurrentCulture);
+        }
+
+        Control NewItem(int index)
         {
             var ring = new Ellipse { Width = 196, Height = 196, StrokeThickness = 1.5, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 4 } };
             ring.SetResourceReference(Shape.StrokeProperty, "Dashed");
             var plus = Ui.Icon("plus", 40, "Faint", 1.5);
             var grid = new Grid { Children = { ring, plus } };
-            var b = new Button { Theme = Ui.Theme("Puff"), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Content = grid, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Button { Theme = Ui.Theme("Puff"), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Content = grid, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 30, 0, 0) };
             Avalonia.Automation.AutomationProperties.SetName(b, "Plant a new profile");
             b.Click += delegate { AddProfile(); };
 
@@ -170,7 +257,9 @@ namespace DandyPicker
             name.HorizontalAlignment = HorizontalAlignment.Center;
             var sub = Ui.Text("Its own sign-in and chats", 13, "Muted");
             sub.HorizontalAlignment = HorizontalAlignment.Center;
-            return new StackPanel { Width = 250, Spacing = 14, Margin = new Thickness(6, 12, 6, 12), Children = { b, Ui.Stack(4, name, sub) } };
+            var item = new StackPanel { Width = 250, Spacing = 14, Margin = new Thickness(6, 4, 6, 12), Children = { b, Ui.Stack(4, name, sub) } };
+            Ui.Rise(item, Later(index * 260 + 1200));
+            return item;
         }
 
         void ShowMenu(Control anchor, Profile p)
@@ -199,6 +288,65 @@ namespace DandyPicker
             card.Margin = new Thickness(12, 4, 12, 12);
             card.BoxShadow = Ui.Shadow();
             close = Ui.ShowPopup(anchor, card);
+        }
+
+        // ---------- usage (opt-in) ----------
+
+        void ShowUsageButton()
+        {
+            var sp = (StackPanel)usageBtn.Content;
+            ((TextBlock)sp.Children[1]).Text = settings.usage ? "Usage on" : "Usage off";
+            Avalonia.Automation.AutomationProperties.SetName(usageBtn, settings.usage ? "Usage on" : "Usage off");
+            usageBtn.Tip(settings.usage ? "Showing each profile's session and weekly usage. Click to turn off." : "Show each profile's session and weekly usage");
+        }
+
+        void ToggleUsage()
+        {
+            if (!settings.usage)
+            {
+                if (!Dialogs.Ask(this, "Show plan usage?", Usage.Warning, "Turn on usage", "Keep it off", true)) return;
+                settings.usage = true;
+            }
+            else
+            {
+                settings.usage = false;
+                usage.Clear();
+            }
+            try { settings.Save(); } catch { }
+            ShowUsageButton();
+            Render();
+            RefreshUsage(true);
+        }
+
+        // Every five minutes, or when the window comes back after a minute or more.
+        async void RefreshUsage(bool force)
+        {
+            if (Program.DemoUsage)
+            {
+                // --demo-usage: made-up numbers, to see the rings without reading any sign-in
+                if (usage.Count > 0) return;
+                double[][] demo = { new double[] { 18, 41 }, new double[] { 72, 55 }, new double[] { 94, 91 } };
+                for (int i = 0; i < profiles.Count; i++)
+                    usage[profiles[i]] = new UsageInfo { Session = demo[i % 3][0], Week = demo[i % 3][1], SessionReset = DateTime.Now.AddMinutes(100 - 30 * (i % 3)), WeekReset = DateTime.Today.AddDays(3).AddHours(9) };
+                Render();
+                return;
+            }
+            if (!settings.usage || fetchingUsage) return;
+            var age = DateTime.Now - usageAt;
+            if (!force && age < TimeSpan.FromMinutes(5) && !(IsActive && age > TimeSpan.FromMinutes(1))) return;
+            fetchingUsage = true;
+            usageAt = DateTime.Now;
+            try
+            {
+                foreach (var p in profiles.ToList())
+                {
+                    var info = await Usage.FetchAsync(p);
+                    if (!settings.usage) return;
+                    usage[p] = info;
+                }
+            }
+            finally { fetchingUsage = false; }
+            Render();
         }
 
         // ---------- signing in ----------
@@ -292,8 +440,9 @@ namespace DandyPicker
                 Dispatcher.UIThread.Post(delegate
                 {
                     refreshing = false;
-                    if (t.Result.SetEquals(running)) return;
+                    if (statusKnown && t.Result.SetEquals(running)) return;
                     running = t.Result;
+                    statusKnown = true;
                     Render();
                 });
             });
@@ -338,8 +487,10 @@ namespace DandyPicker
         void CustomizeProfile(Profile p)
         {
             var copy = new Profile { name = p.name, dataDir = p.dataDir, color = p.color, wave = p.wave, bend = p.bend, tips = p.tips };
-            if (!Dialogs.Customize(this, copy, false, profiles.Count)) return;
+            if (!Dialogs.Customize(this, copy, false, profiles.IndexOf(p))) return;
             p.name = copy.name; p.color = copy.color; p.wave = copy.wave; p.bend = copy.bend; p.tips = copy.tips;
+            Button holder;
+            if (plants.TryGetValue(p, out holder)) ((PlantView)holder.Content).SetPlant(new Plant(p, profiles.IndexOf(p)));
             Save();
         }
 

@@ -22,6 +22,9 @@ namespace DandyPicker
     {
         public const string Title = "DandyPicker";
 
+        // --demo-usage: show made-up usage, without reading any sign-in (for trying the look).
+        public static bool DemoUsage;
+
         public static string LogPath { get { return Path.Combine(AppContext.BaseDirectory, "dandypicker-error.log"); } }
 
         [DllImport("user32.dll")] static extern IntPtr FindWindow(string cls, string title);
@@ -29,8 +32,9 @@ namespace DandyPicker
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            DemoUsage = Array.IndexOf(args, "--demo-usage") >= 0;
             bool first;
             using (var mutex = new Mutex(true, "DandyPicker.SingleInstance", out first))
             {

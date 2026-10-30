@@ -11,29 +11,52 @@ means its own sign-in, chats and settings, and its own single-instance lock, so
 it runs alongside the normal one. DandyPicker keeps a list of these profiles
 and launches each with the right folder.
 
-Each profile is a dandelion. A running one glows green ("in bloom"):
+Each profile is a plant: a dandelion on a stem, growing from a patch of soil
+with circuit-board roots. When the window opens they grow in one after another.
 
 - **Open** — start a profile. A running one shows **Show window** instead,
-  which brings it to the front.
-- **Click the flower** to customize it: name, color, waviness, stem bend and
-  seed tips.
+  which brings it to the front. While it runs, its frame glows, and white dots
+  run down its roots and leave as little packets of its own bits. When it
+  closes, its seeds wilt toward the ground and its leaves fold up.
+- **Click the plant** to customize it: name, color, waviness, stem bend and
+  seed tips. Hovering makes it sway.
 - **⋯ menu** — **Customize**, **Send sign-in link** (see below), **Open data
   folder**, **Desktop shortcut** and **Remove from list**. Removing never
   deletes the profile's data folder.
-
-The flower is grown from the profile's name and folder. Going clockwise from
-the gold key seed, each seed is one of four lengths (2 bits), so four seeds
-spell one byte of `name/folder`: the picture can be read back like a QR code
-(**Show the code** in the Customize window). The same text also hashes to three
-seed words, like `mallow · hazel · marrow`, which name the flower and pick its
-default color. The look you choose never changes what the seeds say.
 - **Open data folder** goes to the folder Claude really uses. Claude is a
   packaged (MSIX) app, so Windows may keep the files in the package's private
   copy of AppData rather than the path shown.
 
+The plant is grown from the profile's name and folder. Starting just clockwise
+of the stem, each seed is one of four lengths (2 bits), so four seeds spell one
+byte of `name/folder`: the picture can be read back like a QR code (**Show the
+code** in the Customize window). The same text also hashes to three seed
+words, like `mallow · hazel · marrow`, which name the flower, pick its default
+color, and seed its soil, pebbles and roots, so no two profiles grow alike.
+Each plant has one leaf per place in the list: profile 1 has one leaf. The look
+you choose never changes what the seeds say.
+
 Profiles are stored in `profiles.json` next to the .exe. An empty `dataDir`
 means Claude's default folder; `color`, `wave`, `bend` and `tips` (the
 flower's look) are optional.
+
+## Plan usage (off by default)
+
+**Usage off/on** in the corner can show each profile's 5-hour session and
+weekly usage as two rings round its flower (gold for the session, blue for the
+week, coral when nearly out), with the reset times under its name.
+
+There's no public API for this, so it's off unless you turn it on, and turning
+it on first explains what it does. When on, DandyPicker reads each profile's
+claude.ai sign-in cookie from Claude's own files in that profile's folder
+(decrypting it with your Windows account's key, as Claude does), sends it to
+claude.ai only, every few minutes, and keeps it in memory just for that
+request. These are unofficial claude.ai addresses, so it may stop working at
+any time. While a profile is open, Claude may keep its cookie file locked; the
+profile then shows "Usage unavailable" with the reason.
+
+To see the rings with made-up numbers, without reading any sign-in, start
+`DandyPicker.exe --demo-usage`. The setting is saved in `settings.json`.
 
 ## Signing a new profile in
 
@@ -50,9 +73,14 @@ window, never to the profile that asked. So:
 
 ## Building
 
-DandyPicker is C# with [Avalonia](https://avaloniaui.net/), styled to match
-Hatpick. `build.cmd` publishes a single self-contained `DandyPicker.exe` into
-the repo folder. It needs the .NET 10 SDK. Close DandyPicker first.
+DandyPicker is C# with [Avalonia](https://avaloniaui.net/). `build.cmd`
+publishes a single self-contained `DandyPicker.exe` into the repo folder. It
+needs the .NET 10 SDK. Close DandyPicker first. The plants are drawn and
+animated by `src\PlantView.cs` from the layout in `src\Plant.cs`.
+
+The text is [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/)
+Next and Mono, bundled from `assets\fonts` under the SIL Open Font License
+(`assets\fonts\OFL.txt`).
 
 `dandelion.ico` is drawn by `tools\make-dandelion-icon.ps1`:
 
