@@ -151,7 +151,7 @@ namespace DandyPicker
                 // Plants that appear after the window opened (a new profile) grow on their own.
                 double appear = double.IsNaN(shownAt) || Later(t0) < 0 ? PlantView.Now - t0 : shownAt;
                 if (holder != null) appear = PlantView.Now - 100000;   // its place changed: show it grown
-                view = new PlantView(p, index, on, appear) { Width = 228, Height = 420 };
+                view = new PlantView(p, index, on, appear) { Width = 228, Height = 427 };
                 holder = new Button { Theme = Ui.Theme("Bare"), Content = view, Tag = index, HorizontalAlignment = HorizontalAlignment.Center };
                 holder.Tip("Customize " + p.name + "'s dandelion");
                 Avalonia.Automation.AutomationProperties.SetName(holder, "Customize " + p.name);
@@ -212,8 +212,16 @@ namespace DandyPicker
                 sp.Children.Add(t);
                 return sp;
             }
-            sp.Children.Add(UsageLine("Session", "resets in " + Until(info.SessionReset), info.Session, "#f2c14e"));
+            // No reset time means no session has started yet.
+            sp.Children.Add(UsageLine("Session", info.SessionReset == null ? "not started" : "resets in " + Until(info.SessionReset), info.Session, "#f2c14e"));
             sp.Children.Add(UsageLine("This week", "resets " + When(info.WeekReset), info.Week, "#8fb4ff"));
+            if (info.StaleReason != null)
+            {
+                var asOf = Ui.Text("as of " + info.ReadAt.ToString("h:mm tt", CultureInfo.CurrentCulture), 12, "Faint");
+                asOf.HorizontalAlignment = HorizontalAlignment.Center;
+                asOf.Tip("Couldn't read newer numbers: " + info.StaleReason);
+                sp.Children.Add(asOf);
+            }
             return sp;
         }
 
@@ -342,6 +350,9 @@ namespace DandyPicker
                 {
                     var info = await Usage.FetchAsync(p);
                     if (!settings.usage) return;
+                    // Keep showing the last numbers that came back, marked with their time.
+                    if (info.Error != null && usage.TryGetValue(p, out var old) && old.Error == null)
+                        info = new UsageInfo { Session = old.Session, Week = old.Week, SessionReset = old.SessionReset, WeekReset = old.WeekReset, ReadAt = old.ReadAt, StaleReason = info.Error };
                     usage[p] = info;
                 }
             }

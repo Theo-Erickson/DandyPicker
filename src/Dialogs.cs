@@ -114,7 +114,7 @@ namespace DandyPicker
             Func<string> dir = delegate { return adding ? Profiles.NewDataDir((name.Text ?? "").Trim(), index) : Profiles.DataDirOf(p); };
             Func<string> payload = delegate { return Dandelion.Payload(name.Text, dir()); };
 
-            var preview = new Border { Width = 200, Height = 368, HorizontalAlignment = HorizontalAlignment.Center };
+            var preview = new Border { Width = 200, Height = 374, HorizontalAlignment = HorizontalAlignment.Center };
             var words = Ui.Text("", 15, "Text");
             words.HorizontalAlignment = HorizontalAlignment.Center;
             var reads = Ui.Text("", 11.5, "Faint");
@@ -144,7 +144,7 @@ namespace DandyPicker
                 string pl = payload();
                 string shown = string.IsNullOrEmpty(color) ? Dandelion.DefaultColor(pl) : color;
                 // a grown, running plant, so the preview shows the whole look (hover it to see it sway)
-                preview.Child = new PlantView(new Plant(pl, shown, wave, bend, tips, index), index, true, PlantView.Now - 100000) { Width = 200, Height = 368, Code = code };
+                preview.Child = new PlantView(new Plant(pl, shown, wave, bend, tips, index), index, true, PlantView.Now - 100000) { Width = 200, Height = 374, Code = code };
                 words.Text = Dandelion.SeedWords(pl);
                 reads.Text = code ? "Reads: " + Dandelion.Decode(Dandelion.Levels(pl)) : "From the stem, clockwise: each seed's length is 2 bits.";
                 legend.IsVisible = code;

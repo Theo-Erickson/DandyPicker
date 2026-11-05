@@ -18,8 +18,10 @@ namespace DandyPicker
         public static readonly Stopwatch Clock = Stopwatch.StartNew();
         public static double Now { get { return Clock.Elapsed.TotalMilliseconds; } }
 
-        // Drawn in a 380 x 700 space, scaled to fit.
-        const double W = 380, H = 700;
+        // Drawn in a 380 x 700 space, scaled to fit, with Top spare above it: the week ring
+        // reaches above the space (to y = -10.5 with its stroke), so everything is drawn Top
+        // lower; otherwise it would be cut off at the control's top edge.
+        const double W = 380, Top = 12, H = 700 + Top;
         const double PacketCycle = 3200;
 
         static readonly Poly SessionRing = Poly.RoundedRect(14, 4, 352, 352, 94);
@@ -158,7 +160,7 @@ namespace DandyPicker
             bool moving = t < t0 + 3400 || hover > 0 || running || now - changedAt < 2400;
 
             double scale = Math.Min(Bounds.Width / W, Bounds.Height / H);
-            using (ctx.PushTransform(Matrix.CreateScale(scale, scale)))
+            using (ctx.PushTransform(Matrix.CreateTranslation(0, Top) * Matrix.CreateScale(scale, scale)))
             {
                 double headWilt = Wilt(now, 0);
                 double open = 1 - Clamp01(headWilt);

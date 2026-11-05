@@ -47,13 +47,17 @@ weekly usage as two rings round its flower (gold for the session, blue for the
 week, coral when nearly out), with the reset times under its name.
 
 There's no public API for this, so it's off unless you turn it on, and turning
-it on first explains what it does. When on, DandyPicker reads each profile's
-claude.ai sign-in cookie from Claude's own files in that profile's folder
-(decrypting it with your Windows account's key, as Claude does), sends it to
-claude.ai only, every few minutes, and keeps it in memory just for that
-request. These are unofficial claude.ai addresses, so it may stop working at
-any time. While a profile is open, Claude may keep its cookie file locked; the
-profile then shows "Usage unavailable" with the reason.
+it on first explains what it does. When on, DandyPicker reads the sign-in token
+Claude Desktop keeps in each profile's `config.json` (decrypting it with your
+Windows account's key, as Claude does) and sends it to api.anthropic.com only,
+every few minutes, to the usage address Claude Code's `/usage` uses. It never
+renews the token, so it can't sign a profile out. Claude keeps the token fresh
+while the profile is open; once it has expired, DandyPicker falls back to the
+profile's claude.ai sign-in cookie, which Claude only unlocks while the
+profile is closed. Tokens and cookies are kept in memory just for that request.
+These are unofficial addresses, so it may stop working at any time. When new
+numbers can't be read, the last ones stay up, marked "as of" their time; with
+none to show, the profile says "Usage unavailable" with the reason.
 
 To see the rings with made-up numbers, without reading any sign-in, start
 `DandyPicker.exe --demo-usage`. The setting is saved in `settings.json`.

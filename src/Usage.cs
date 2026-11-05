@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -34,17 +35,23 @@ namespace DandyPicker
         public double Session, Week;          // percent used
         public DateTime? SessionReset, WeekReset;
         public string Error;                  // set when it couldn't be read
+        public DateTime ReadAt = DateTime.Now;
+        public string StaleReason;            // set when these are the last good numbers, not new ones
     }
 
     // Plan usage (the 5-hour session and the week) for a profile's claude.ai account.
     //
     // There's no public API for this. When the user turns usage on, DandyPicker:
-    //  1. reads the profile's claude.ai sign-in cookie (sessionKey) from Claude's own cookie
-    //     file in that profile's data folder, decrypting it with the key Windows keeps for
-    //     the current user (the same thing Claude itself does);
-    //  2. sends it to claude.ai only, to the same unofficial addresses the claude.ai usage
-    //     page uses, and reads the percentages.
-    // The cookie is kept in memory for that one request and never saved or sent anywhere else.
+    //  1. reads the sign-in token Claude Desktop keeps in the profile's config.json
+    //     ("oauth:tokenCacheV2"), decrypting it with the profile's key, which Windows keeps for
+    //     the current user (the same thing Claude itself does). config.json isn't locked, so
+    //     this works while the profile is open, when Claude keeps the token fresh;
+    //  2. sends it to api.anthropic.com only, to the usage address Claude Code's /usage uses.
+    // It never refreshes the token (that would replace the profile's own sign-in). If there's no
+    // usable token, as after a profile has been closed a while, it falls back to the claude.ai
+    // sign-in cookie, which is unlocked exactly when the profile is closed, and the unofficial
+    // address the claude.ai usage page uses.
+    // Tokens and cookies are kept in memory for that one request and never saved or sent anywhere else.
     static class Usage
     {
         static readonly HttpClient Http = new HttpClient(new HttpClientHandler { UseCookies = false, AutomaticDecompression = DecompressionMethods.All })
@@ -54,15 +61,53 @@ namespace DandyPicker
 
         public const string Warning =
             "Showing usage ties DandyPicker to each profile's claude.ai sign-in. When it's on, DandyPicker:\n\n" +
-            "•  Reads each profile's claude.ai sign-in cookie from Claude's files in that profile's data folder, " +
-            "decrypting it with your Windows account's key, as Claude itself does.\n" +
-            "•  Sends it to claude.ai, and only claude.ai, every few minutes to read your session and weekly usage.\n" +
-            "•  Keeps it in memory just for that request. It is never saved or sent anywhere else.\n\n" +
-            "This uses unofficial claude.ai addresses, not a supported API, so it may stop working at any time, " +
+            "•  Reads each profile's sign-in token from Claude's files in that profile's data folder, " +
+            "decrypting it with your Windows account's key, as Claude itself does. If that token has expired, " +
+            "it reads the profile's claude.ai sign-in cookie instead.\n" +
+            "•  Sends the token to api.anthropic.com, or the cookie to claude.ai, and nowhere else, every few minutes " +
+            "to read your session and weekly usage. It never renews the token, so it can't sign the profile out.\n" +
+            "•  Keeps them in memory just for that request. They are never saved or sent anywhere else.\n\n" +
+            "These are unofficial addresses, not a supported API, so they may stop working at any time, " +
             "and Anthropic may not expect apps to use them. Anyone who can already run programs as you could read these files too.\n\n" +
             "You can turn it off again at any time.";
 
         public static async Task<UsageInfo> FetchAsync(Profile p)
+        {
+            // 1. Claude Desktop's own sign-in token, via api.anthropic.com.
+            string tokenWhy = null;
+            List<string> tokens = null;
+            try { tokens = await Task.Run(() => ReadDesktopTokens(p)); }
+            catch (Exception e) { tokenWhy = e.Message; }
+            if (tokens != null)
+                foreach (var t in tokens)
+                {
+                    try { return await FromToken(t); }
+                    catch (Exception e) { tokenWhy = e.Message; }
+                }
+
+            // 2. The claude.ai cookie (readable while the profile is closed).
+            var info = await FromCookie(p);
+            if (info.Error != null && tokenWhy != null) info.Error = tokenWhy + "\n" + info.Error;
+            return info;
+        }
+
+        static async Task<UsageInfo> FromToken(string token)
+        {
+            var root = await GetJson("https://api.anthropic.com/api/oauth/usage", req =>
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
+                req.Headers.TryAddWithoutValidation("anthropic-beta", "oauth-2025-04-20");
+                req.Headers.TryAddWithoutValidation("User-Agent", "DandyPicker");
+            }, "api.anthropic.com");
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("five_hour", out _))
+                throw new Exception("api.anthropic.com answered, but not with usage.");
+            var info = new UsageInfo();
+            ReadWindow(root, "five_hour", out info.Session, out info.SessionReset);
+            ReadWindow(root, "seven_day", out info.Week, out info.WeekReset);
+            return info;
+        }
+
+        static async Task<UsageInfo> FromCookie(Profile p)
         {
             string key;
             try { key = await Task.Run(() => ReadSessionKey(p)); }
@@ -101,20 +146,117 @@ namespace DandyPicker
                 reset = at.ToLocalTime();
         }
 
-        static async Task<JsonElement> GetJson(string url, string sessionKey)
+        static Task<JsonElement> GetJson(string url, string sessionKey)
+        {
+            return GetJson(url, req =>
+            {
+                req.Headers.TryAddWithoutValidation("Cookie", "sessionKey=" + sessionKey);
+                req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
+            }, "claude.ai");
+        }
+
+        static async Task<JsonElement> GetJson(string url, Action<HttpRequestMessage> auth, string site)
         {
             var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.TryAddWithoutValidation("Cookie", "sessionKey=" + sessionKey);
+            auth(req);
             req.Headers.TryAddWithoutValidation("Accept", "application/json");
-            req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
             using (var res = await Http.SendAsync(req))
             {
                 if (res.StatusCode == HttpStatusCode.Unauthorized || res.StatusCode == HttpStatusCode.Forbidden)
-                    throw new Exception("claude.ai turned the request down (" + (int)res.StatusCode + "). The sign-in may have expired, or claude.ai is blocking apps.");
-                if (!res.IsSuccessStatusCode) throw new Exception("claude.ai answered " + (int)res.StatusCode + ".");
+                    throw new Exception(site + " turned the request down (" + (int)res.StatusCode + "). The sign-in may have expired, or " + site + " is blocking apps.");
+                if ((int)res.StatusCode == 429) throw new Exception(site + " asked DandyPicker to slow down (429).");
+                if (!res.IsSuccessStatusCode) throw new Exception(site + " answered " + (int)res.StatusCode + ".");
                 string body = await res.Content.ReadAsStringAsync();
                 using (var doc = JsonDocument.Parse(body)) return doc.RootElement.Clone();
             }
+        }
+
+        // ---------- Claude Desktop's sign-in token ----------
+
+        // Access tokens from the profile's config.json, freshest first, leaving out expired ones.
+        // Returns null when the profile has none. The layout inside the token cache isn't
+        // documented, so this looks for access tokens (sk-ant-oat...) anywhere in it, each with
+        // the expiry time stored beside it, if any. Refresh tokens (sk-ant-ort...) are never used.
+        static List<string> ReadDesktopTokens(Profile p)
+        {
+            string cfg = null, dir = null;
+            DateTime newest = DateTime.MinValue;
+            foreach (var d in Folders(p))
+            {
+                string f = Path.Combine(d, "config.json");
+                if (File.Exists(f) && File.GetLastWriteTimeUtc(f) > newest) { cfg = f; dir = d; newest = File.GetLastWriteTimeUtc(f); }
+            }
+            if (cfg == null) return null;
+
+            string text;
+            using (var s = new FileStream(cfg, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var r = new StreamReader(s)) text = r.ReadToEnd();
+
+            var found = new List<KeyValuePair<string, DateTime?>>();
+            byte[] aes = null;
+            using (var doc = JsonDocument.Parse(text))
+                foreach (var name in new[] { "oauth:tokenCacheV2", "oauth:tokenCache" })
+                {
+                    if (!doc.RootElement.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.String) continue;
+                    string plain;
+                    try
+                    {
+                        if (aes == null) aes = ReadKey(Path.Combine(dir, "Local State"));
+                        plain = Decrypt(Convert.FromBase64String(v.GetString()), aes, 0);
+                    }
+                    catch (Exception) { continue; }
+                    if (plain == null) continue;
+                    if (plain.StartsWith("sk-ant-oat")) { found.Add(new KeyValuePair<string, DateTime?>(plain.Trim(), null)); continue; }
+                    try { using (var inner = JsonDocument.Parse(plain)) CollectTokens(inner.RootElement, found, 0); }
+                    catch (JsonException) { }
+                }
+            if (found.Count == 0) return null;
+
+            var now = DateTime.UtcNow.AddMinutes(1);
+            var usable = found.Where(t => t.Value == null || t.Value > now)
+                              .OrderByDescending(t => t.Value ?? DateTime.MaxValue)
+                              .Select(t => t.Key).Distinct().Take(3).ToList();
+            if (usable.Count == 0) throw new Exception("This profile's desktop sign-in token has expired. Open the profile and Claude renews it.");
+            return usable;
+        }
+
+        static void CollectTokens(JsonElement e, List<KeyValuePair<string, DateTime?>> found, int depth)
+        {
+            if (depth > 8) return;
+            if (e.ValueKind == JsonValueKind.Array) { foreach (var x in e.EnumerateArray()) CollectTokens(x, found, depth + 1); return; }
+            if (e.ValueKind == JsonValueKind.String)
+            {
+                // Some caches keep each entry as a JSON string inside the JSON.
+                string s = e.GetString();
+                if (s != null && s.StartsWith("{"))
+                    try { using (var d = JsonDocument.Parse(s)) CollectTokens(d.RootElement, found, depth + 1); } catch (JsonException) { }
+                return;
+            }
+            if (e.ValueKind != JsonValueKind.Object) return;
+
+            DateTime? expires = null;
+            var tokens = new List<string>();
+            foreach (var prop in e.EnumerateObject())
+            {
+                var v = prop.Value;
+                if (v.ValueKind == JsonValueKind.String && v.GetString().StartsWith("sk-ant-oat")) tokens.Add(v.GetString());
+                else if (prop.Name.IndexOf("expir", StringComparison.OrdinalIgnoreCase) >= 0) expires = ReadTime(v);
+                else CollectTokens(v, found, depth + 1);
+            }
+            foreach (var t in tokens) found.Add(new KeyValuePair<string, DateTime?>(t, expires));
+        }
+
+        // An expiry time as Unix seconds, Unix milliseconds or an ISO date; UTC.
+        static DateTime? ReadTime(JsonElement v)
+        {
+            if (v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out double n) && n > 0)
+            {
+                try { return n > 1e11 ? DateTimeOffset.FromUnixTimeMilliseconds((long)n).UtcDateTime : DateTimeOffset.FromUnixTimeSeconds((long)n).UtcDateTime; }
+                catch (ArgumentOutOfRangeException) { return null; }
+            }
+            if (v.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(v.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at))
+                return at.UtcDateTime;
+            return null;
         }
 
         // ---------- the profile's sign-in cookie ----------
