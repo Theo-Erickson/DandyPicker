@@ -1,0 +1,158 @@
+{
+  "tool_version": "2.3",
+  "fps": 30,
+  "out": "../../.github/readme",
+  "work": ".work",
+  "recordings": {
+    "showcase": {
+      "source": "command",
+      "run": [
+        "python",
+        "demo.py"
+      ],
+      "driver": [
+        "python",
+        "driver.py"
+      ],
+      "warmup": 0.3,
+      "seconds": 22,
+      "region": [
+        50,
+        66,
+        1472,
+        1110
+      ],
+      "draw_mouse": true
+    }
+  },
+  "banner": {
+    "recording": "showcase",
+    "title": [
+      "DANDY",
+      "PICKER"
+    ],
+    "tagline": "One Claude per plant",
+    "font": "../../assets/fonts/AtkinsonHyperlegibleNext.ttf",
+    "icon": "../../dandelion.ico",
+    "colors": {
+      "bg": "#0a0e1a",
+      "sky_mid": "#111733",
+      "sky_end": "#0a0e1a",
+      "from": "#f2c14e",
+      "to": "#ffe08a",
+      "soft": "#8a93b0",
+      "accent": "#f2c14e",
+      "text": "#eef0f8"
+    },
+    "labels": [
+      "GROW",
+      "SWAY",
+      "CUSTOMIZE",
+      "THE CODE"
+    ],
+    "first": 0,
+    "segment": 168,
+    "take": [
+      0,
+      150
+    ],
+    "step": 2,
+    "ms": 66
+  },
+  "hero": {
+    "recording": "showcase",
+    "first": 0,
+    "segment": 168,
+    "count": 4,
+    "take": [
+      0,
+      150
+    ],
+    "step": 3,
+    "ms": 100
+  },
+  "clips": {
+    "recording": "showcase",
+    "first": 0,
+    "segment": 168,
+    "take": [
+      0,
+      150
+    ],
+    "step": 2,
+    "ms": 66,
+    "names": [
+      "grow",
+      "sway",
+      "customize",
+      "code"
+    ]
+  },
+  "readme": {
+    "name": "DandyPicker",
+    "tagline": "One Claude per plant",
+    "note": "Plan usage is off by default. Turning it on reads each profile's sign-in token and sends it to api.anthropic.com only; see [Plan usage](#plan-usage-off-by-default).",
+    "badges": [
+      {
+        "label": "version",
+        "message": "2.0.0",
+        "color": "#f2c14e"
+      },
+      {
+        "label": "platform",
+        "message": "Windows",
+        "color": "#2a3150"
+      },
+      {
+        "label": ".NET",
+        "message": "10",
+        "color": "#512bd4"
+      }
+    ],
+    "captions": {
+      "grow": "the profiles grow in, one after another",
+      "sway": "hover a plant and it sways",
+      "customize": "color, waviness, stem bend and seed tips",
+      "code": "the seeds spell the profile's name and folder"
+    },
+    "folders": {
+      "src": "the app: Avalonia on .NET 10; the plants are PlantView.cs and Plant.cs",
+      "assets": "fonts: Atkinson Hyperlegible (SIL OFL)",
+      "tools": "the icon maker, and readmotion/: the config, demo profiles and driver that record this README's media"
+    },
+    "sections": [
+      "banner",
+      "badges",
+      "nav",
+      "hero",
+      "note",
+      "whats_new",
+      "features",
+      "clips",
+      "controls",
+      "install",
+      "building",
+      "development",
+      "license"
+    ],
+    "keep": true,
+    "features": [
+      {
+        "title": "Several accounts at once",
+        "text": "Each profile is its own Claude Desktop with its own data folder, so work and personal run side by side, each signed in."
+      },
+      {
+        "title": "Each profile is a plant",
+        "text": "It grows from the profile's name and folder: the seeds spell them out, and no two plants grow alike."
+      },
+      {
+        "title": "Plan usage at a glance, if you want it",
+        "text": "Opt in to see each profile's session and weekly usage as rings round its flower."
+      },
+      {
+        "title": "Sign-in hand-off",
+        "text": "It catches the `claude://` sign-in link from your clipboard and sends it to the profile that asked."
+      }
+    ]
+  }
+}
