@@ -81,6 +81,7 @@ namespace DandyPicker
             {
                 shownAt = PlantView.Now;
                 Ui.Rise(caption, 0); Ui.Rise(title, 120); Ui.Rise(buttons, 220);
+                WindowTitles.Start();
                 RefreshStatus(); CheckClipboard(); RefreshUsage(true);
                 timer.Start();
             };
@@ -90,7 +91,7 @@ namespace DandyPicker
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             timer.Tick += delegate { RefreshStatus(); CheckClipboard(); RefreshUsage(false); };
             Activated += delegate { CheckClipboard(); RefreshUsage(false); };
-            Closed += delegate { timer.Stop(); };
+            Closed += delegate { timer.Stop(); WindowTitles.Stop(); };
         }
 
         // Milliseconds left until 'ms' after the window opened; -1 once that's past (no animation).
@@ -446,17 +447,34 @@ namespace DandyPicker
         {
             if (refreshing) return;
             refreshing = true;
-            Task.Run(() => Profiles.RunningDirs()).ContinueWith(t =>
+            Task.Run(() => Profiles.RunningProcesses()).ContinueWith(t =>
             {
                 Dispatcher.UIThread.Post(delegate
                 {
                     refreshing = false;
-                    if (statusKnown && t.Result.SetEquals(running)) return;
-                    running = t.Result;
+                    RetitleWindows(t.Result);
+                    var dirs = new HashSet<string>(t.Result.Values, StringComparer.OrdinalIgnoreCase);
+                    if (statusKnown && dirs.SetEquals(running)) return;
+                    running = dirs;
                     statusKnown = true;
                     Render();
                 });
             });
+        }
+
+        Dictionary<int, string> processes = new Dictionary<int, string>();
+
+        // Names each running profile's Claude window after the profile.
+        void RetitleWindows(Dictionary<int, string> procs)
+        {
+            processes = procs;
+            var titles = new Dictionary<int, string>();
+            foreach (var kv in procs)
+            {
+                var p = profiles.FirstOrDefault(x => string.Equals(Profiles.DataDirOf(x).TrimEnd('\\'), kv.Value, StringComparison.OrdinalIgnoreCase));
+                if (p != null) titles[kv.Key] = WindowTitles.TitleOf(p);
+            }
+            WindowTitles.Update(titles);
         }
 
         void RefreshSoon()
@@ -484,6 +502,7 @@ namespace DandyPicker
         void Save()
         {
             Profiles.Save(profiles);
+            RetitleWindows(processes);   // a new name or title shows straight away
             Render();
         }
 
@@ -497,9 +516,9 @@ namespace DandyPicker
 
         void CustomizeProfile(Profile p)
         {
-            var copy = new Profile { name = p.name, dataDir = p.dataDir, color = p.color, wave = p.wave, bend = p.bend, tips = p.tips };
+            var copy = new Profile { name = p.name, dataDir = p.dataDir, color = p.color, wave = p.wave, bend = p.bend, tips = p.tips, windowTitle = p.windowTitle };
             if (!Dialogs.Customize(this, copy, false, profiles.IndexOf(p))) return;
-            p.name = copy.name; p.color = copy.color; p.wave = copy.wave; p.bend = copy.bend; p.tips = copy.tips;
+            p.name = copy.name; p.color = copy.color; p.wave = copy.wave; p.bend = copy.bend; p.tips = copy.tips; p.windowTitle = copy.windowTitle;
             Button holder;
             if (plants.TryGetValue(p, out holder)) ((PlantView)holder.Content).SetPlant(new Plant(p, profiles.IndexOf(p)));
             Save();

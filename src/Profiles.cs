@@ -22,6 +22,8 @@ namespace DandyPicker
         public double? bend { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string tips { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string windowTitle { get; set; }   // null = "Claude (name)"
     }
 
     // Everything that touches Claude or the disk: the profile list, which profiles are
@@ -80,11 +82,17 @@ namespace DandyPicker
         // Data dirs whose Claude Desktop main process is alive.
         public static HashSet<string> RunningDirs()
         {
-            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return new HashSet<string>(RunningProcesses().Values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Each live Claude Desktop main process's id and data dir.
+        public static Dictionary<int, string> RunningProcesses()
+        {
+            var set = new Dictionary<int, string>();
             try
             {
                 using (var q = new ManagementObjectSearcher(
-                    "SELECT CommandLine, ExecutablePath FROM Win32_Process WHERE Name='Claude.exe' OR Name='claude-desktop.exe'"))
+                    "SELECT ProcessId, CommandLine, ExecutablePath FROM Win32_Process WHERE Name='Claude.exe' OR Name='claude-desktop.exe'"))
                 {
                     foreach (ManagementObject pr in q.Get())
                     {
@@ -94,7 +102,7 @@ namespace DandyPicker
                         if (exe == null || exe.IndexOf(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) < 0) continue; // Claude Code CLI etc.
                         var m = Regex.Match(cmd, "--user-data-dir=(?:\"([^\"]+)\"|(\\S+))");
                         string dir = !m.Success ? DefaultDir : (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
-                        set.Add(dir.TrimEnd('\\'));
+                        set[(int)(uint)pr["ProcessId"]] = dir.TrimEnd('\\');
                     }
                 }
             }

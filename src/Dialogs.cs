@@ -174,8 +174,13 @@ namespace DandyPicker
                     tipRow.Children.Add(b);
                 }
             };
+            // The title of the profile's Claude window; blank uses "Claude (name)".
+            var titleBox = new TextBox { Text = p.windowTitle ?? "" };
+            Action showTitleHint = delegate { titleBox.PlaceholderText = WindowTitles.TitleOf(new Profile { name = (name.Text ?? "").Trim() }); };
+            showTitleHint();
+
             codeBtn.Click += delegate { code = !code; draw(); };
-            name.TextChanged += delegate { draw(); };
+            name.TextChanged += delegate { draw(); showTitleHint(); };
 
             Func<string, double, Action<double>, Control> slider = (label, value, set) =>
             {
@@ -189,6 +194,7 @@ namespace DandyPicker
             left.Margin = new Thickness(0, 0, 28, 0);
             var right = Ui.Stack(14,
                 Ui.Stack(6, Ui.Text("Name", 12, "Muted"), name, where),
+                Ui.Stack(6, Ui.Text("Window title (leave blank for the default)", 12, "Muted"), titleBox),
                 Ui.Stack(8, Ui.Text("Color", 12, "Muted"), swatches),
                 slider("Waviness", wave, v => wave = v),
                 slider("Stem bend", bend, v => bend = v),
@@ -207,6 +213,8 @@ namespace DandyPicker
                 if (adding) p.dataDir = dir();
                 p.color = color;
                 p.wave = Math.Round(wave, 2); p.bend = Math.Round(bend, 2); p.tips = tips;
+                string t = (titleBox.Text ?? "").Trim();
+                p.windowTitle = t.Length == 0 ? null : t;
                 saved = true;
                 w.Close();
             }, "BtnPrimary");
