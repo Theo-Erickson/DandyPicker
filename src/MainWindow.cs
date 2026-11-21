@@ -214,8 +214,8 @@ namespace DandyPicker
                 return sp;
             }
             // No reset time means no session has started yet.
-            sp.Children.Add(UsageLine("Session", info.SessionReset == null ? "not started" : "resets in " + Until(info.SessionReset), info.Session, "#f2c14e"));
-            sp.Children.Add(UsageLine("This week", "resets " + When(info.WeekReset), info.Week, "#8fb4ff"));
+            sp.Children.Add(UsageLine("Session", info.SessionReset == null ? "not started" : "resets in " + Until(info.SessionReset), info.Session, info.SessionPace, "#f2c14e"));
+            sp.Children.Add(UsageLine("This week", "resets " + When(info.WeekReset), info.Week, info.WeekPace, "#8fb4ff"));
             if (info.StaleReason != null)
             {
                 var asOf = Ui.Text("as of " + info.ReadAt.ToString("h:mm tt", CultureInfo.CurrentCulture), 12, "Faint");
@@ -226,7 +226,7 @@ namespace DandyPicker
             return sp;
         }
 
-        static Control UsageLine(string what, string reset, double percent, string color)
+        static Control UsageLine(string what, string reset, double percent, double? pace, string color)
         {
             bool hot = percent >= 90;
             var dot = new Ellipse { Width = 8, Height = 8, Fill = Ui.B(hot ? "#e8825f" : color), VerticalAlignment = VerticalAlignment.Center };
@@ -235,6 +235,10 @@ namespace DandyPicker
             if (hot) t.Foreground = Ui.B("#f0a37a");
             var row = Ui.Row(7, dot, t);
             row.HorizontalAlignment = HorizontalAlignment.Center;
+            if (pace != null)
+                row.Tip("On track: " + Math.Round(pace.Value) + "% (the tick on the ring). " +
+                        (percent > pace.Value + 0.5 ? "Ahead of pace by " + Math.Round(percent - pace.Value) + " points."
+                                                    : "Under pace by " + Math.Round(pace.Value - percent) + " points."));
             return row;
         }
 

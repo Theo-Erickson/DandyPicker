@@ -300,8 +300,8 @@ namespace DandyPicker
             return g;
         }
 
-        // A rounded rectangle's outline as points, starting at the top edge after the
-        // top-left corner and going clockwise (as SVG draws one).
+        // A rounded rectangle's outline as points, starting and ending at the middle of the
+        // top edge and going clockwise, so a part-drawn ring fills from 12 o'clock.
         public static Poly RoundedRect(double x, double y, double w, double h, double r)
         {
             var p = new List<Point>();
@@ -309,11 +309,12 @@ namespace DandyPicker
             {
                 for (int i = 1; i <= 12; i++) { double a = start + Math.PI / 2 * i / 12; p.Add(new Point(cx + Math.Cos(a) * r, cy + Math.Sin(a) * r)); }
             };
-            p.Add(new Point(x + r, y));
+            p.Add(new Point(x + w / 2, y));
             p.Add(new Point(x + w - r, y)); arc(x + w - r, y + r, -Math.PI / 2);
             p.Add(new Point(x + w, y + h - r)); arc(x + w - r, y + h - r, 0);
             p.Add(new Point(x + r, y + h)); arc(x + r, y + h - r, Math.PI / 2);
             p.Add(new Point(x, y + r)); arc(x + r, y + r, Math.PI);
+            p.Add(new Point(x + w / 2, y));
             return new Poly(p);
         }
     }

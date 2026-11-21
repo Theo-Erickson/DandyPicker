@@ -293,6 +293,26 @@ namespace DandyPicker
             double fill = Out3(t / 1300);
             DrawRing(ctx, SessionRing, usage.Session, fill, "#f2c14e", now);
             DrawRing(ctx, WeekRing, usage.Week, fill, "#8fb4ff", now);
+            DrawPace(ctx, SessionRing, usage.SessionPace, fill);
+            DrawPace(ctx, WeekRing, usage.WeekPace, fill);
+        }
+
+        // A short tick across the ring where usage would be if it were spread evenly over
+        // the window: past it, the window is being used up faster than it lasts.
+        static void DrawPace(DrawingContext ctx, Poly ring, double? pace, double fill)
+        {
+            if (pace == null || fill <= 0) return;
+            double f = Clamp01(pace.Value / 100);
+            var at = ring.PointAt(f);
+            var a = ring.PointAt(Math.Max(0, f - 0.002));
+            var b = ring.PointAt(Math.Min(1, f + 0.002));
+            double dx = b.X - a.X, dy = b.Y - a.Y, len = Math.Sqrt(dx * dx + dy * dy);
+            if (len <= 0) return;
+            double nx = -dy / len * 9, ny = dx / len * 9;   // across the ring
+            var from = new Point(at.X - nx, at.Y - ny);
+            var to = new Point(at.X + nx, at.Y + ny);
+            ctx.DrawLine(P(C("#0b1020", 0.85 * fill), 7), from, to);
+            ctx.DrawLine(P(C("#ffffff", 0.95 * fill), 3.5), from, to);
         }
 
         static void DrawRing(DrawingContext ctx, Poly ring, double percent, double fill, string color, double now)

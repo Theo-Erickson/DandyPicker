@@ -37,6 +37,21 @@ namespace DandyPicker
         public string Error;                  // set when it couldn't be read
         public DateTime ReadAt = DateTime.Now;
         public string StaleReason;            // set when these are the last good numbers, not new ones
+
+        public static readonly TimeSpan SessionLength = TimeSpan.FromHours(5), WeekLength = TimeSpan.FromDays(7);
+
+        // Where usage would be if it were spread evenly over the window: the percent of the
+        // window that has passed (2.5 hours into a 5-hour session is 50). Null when the window
+        // hasn't started, as a session with no reset time.
+        public static double? Pace(DateTime? reset, TimeSpan length)
+        {
+            if (reset == null) return null;
+            double left = (reset.Value - DateTime.Now).TotalMilliseconds / length.TotalMilliseconds;
+            return Math.Max(0, Math.Min(1, 1 - left)) * 100;
+        }
+
+        public double? SessionPace { get { return Pace(SessionReset, SessionLength); } }
+        public double? WeekPace { get { return Pace(WeekReset, WeekLength); } }
     }
 
     // Plan usage (the 5-hour session and the week) for a profile's claude.ai account.
